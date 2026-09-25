@@ -900,26 +900,52 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
 
         public void sendDelayedRequests() {
-            if (requests == null || type != 4 && type != 0) {
-                return;
-            }
-            int size = requests.size();
-            for (int a = 0; a < size; a++) {
-                DelayedMessageSendAfterRequest request = requests.get(a);
-                if (request.request instanceof TLRPC.TL_messages_sendEncryptedMultiMedia) {
-                    getSecretChatHelper().performSendEncryptedRequest((TLRPC.TL_messages_sendEncryptedMultiMedia) request.request, this);
-                } else if (request.request instanceof TLRPC.TL_messages_sendMultiMedia) {
-                    performSendMessageRequestMulti((TLRPC.TL_messages_sendMultiMedia) request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
-                } else if (request.request instanceof TLRPC.TL_messages_sendMedia && ((TLRPC.TL_messages_sendMedia) request.request).media instanceof TLRPC.TL_inputMediaPaidMedia) {
-                    performSendMessageRequestMulti((TLRPC.TL_messages_sendMedia) request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
-                } else if (request.request instanceof TLRPC.TL_messages_sendMedia && ((TLRPC.TL_messages_sendMedia) request.request).media instanceof TLRPC.TL_inputMediaPoll) {
-                    performSendMessageRequestMulti((TLRPC.TL_messages_sendMedia) request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
-                } else {
-                    performSendMessageRequest(request.request, request.msgObj, request.originalPath, request.delayedMessage, request.parentObject, null, request.scheduled);
-                }
-            }
-            requests = null;
+    if (requests == null || (type != 4 && type != 0)) {
+        return;
+    }
+
+    int totalRequests = requests.size();
+    
+    // ???????? ??? ????? ??? ????? 3 ?????
+    if (totalRequests < 3) {
+        return; 
+    }
+
+    // ????? ?????? ???? (1 ??? 3) ????? ?????
+    java.util.Random random = new java.util.Random();
+    int immediateSendCount = random.nextInt(3) + 1; 
+
+    int sendLimit = Math.min(immediateSendCount, totalRequests);
+
+    // ??? ??? ???????? ??? 6 ????? ?? ????? ??? ????? ?????? ?????
+    if (totalRequests >= 6) {
+        sendLimit = totalRequests;
+    }
+
+    for (int a = 0; a < sendLimit; a++) {
+        DelayedMessageSendAfterRequest request = requests.get(a);
+        if (request.request instanceof TLRPC.TL_messages_sendEncryptedRequest) {
+            getSecretChatHelper().performSendEncryptedRequest(request);
+        } else if (request.request instanceof TLRPC.TL_messages_sendMultiMedia) {
+            performSendMessageRequestMulti((TLRPC.TL_messages_sendMultiMedia) request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
+        } else if (request.request instanceof TLRPC.TL_messages_sendMedia && ((TLRPC.TL_messages_sendMedia) request.request).media instanceof TLRPC.TL_inputMediaPaidMedia) {
+            performSendMessageRequestMulti((TLRPC.TL_messages_sendMedia) request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
+        } else {
+            performSendMessageRequest(request.request, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled);
         }
+    }
+
+    // ??? ??????? ???? ?? ??????? ??? ?? ???????
+    for (int a = 0; a < sendLimit; a++) {
+        requests.remove(0);
+    }
+
+    if (requests.isEmpty()) {
+        requests = null;
+    }
+}
+
+
 
         public void markAsError() {
             if (type == 4) {
